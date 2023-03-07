@@ -5,9 +5,9 @@ import { generateJWT } from "../jwt";
 
 export const register = async (req, res) => {
   res.header('Access-Control-Allow-Origin', '*');
-    const { username, email, password, phone, allowed_roles, default_role } = req.body;
+    const { username, email, password, phone, default_role } = req.body;
 
-    if(allowed_roles === "" || default_role === ""){
+    if(default_role === ""){
       res.status(500).send();
     }
   
@@ -28,7 +28,6 @@ export const register = async (req, res) => {
             email,
             password: await bcrypt.hash(password, 10),
             phone,
-            allowed_roles: allowed_roles,
             default_role
           },
         }
@@ -39,7 +38,6 @@ export const register = async (req, res) => {
       res.send({
         token: generateJWT({
           defaultRole: default_role,
-          allowedRoles: allowed_roles.split(","),
           otherClaims: {
             "X-Hasura-User-Id": userId,
           },
@@ -68,7 +66,6 @@ export const login = async (req, res) => {
             id
             username
             password
-            allowed_roles
             default_role
           }
         }
@@ -94,13 +91,11 @@ export const login = async (req, res) => {
       res.send({
         token: "Bearer " + generateJWT({
           defaultRole: user.default_role,
-          allowedRoles: user.allowed_roles.split(","),
           otherClaims: {
             "X-Hasura-User-Id": user.id,
           },
         }),
         username: user.username,
-        allowed_roles: user.allowed_roles,
         default_role: user.default_role
       });
     } else {
