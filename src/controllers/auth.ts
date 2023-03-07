@@ -4,44 +4,61 @@ import { client } from "../client";
 import { generateJWT } from "../jwt";
 
 export const register = async (req, res) => {
-    const { email, password } = req.body as Record<string, string>;;
+  res.header('Access-Control-Allow-Origin', '*');
+    const { username, email, password, phone, allowed_roles, default_role } = req.body;
+
+    if(allowed_roles === "" || default_role === ""){
+      res.status(500).send();
+    }
   
-    // In production app, you would check if user is already registered
-    // We skip that in this tutorial for the sake of time
-  
-    // We insert the user using a mutation
-    // Note that we salt and hash the password using bcrypt
-    const { insert_user_one } = await client.request(
-      gql`
-        mutation registerUser($user: user_insert_input!) {
-          insert_user_one(object: $user) {
-            id
+    try {
+      // We insert the user using a mutation
+      // Note that we salt and hash the password using bcrypt
+      const { insert_user_one } = await client.request(
+        gql`
+          mutation registerUser($user: user_insert_input!) {
+            insert_user_one(object: $user) {
+              id
+            }
           }
+        `,
+        {
+          user: {
+            username,
+            email,
+            password: await bcrypt.hash(password, 10),
+            phone,
+            allowed_roles: allowed_roles,
+            default_role
+          },
         }
-      `,
-      {
-        user: {
-          email,
-          password: await bcrypt.hash(password, 10),
-        },
-      }
-    ) as any;
-  
-    const { id: userId } = insert_user_one;
-  
-    res.send({
-      token: generateJWT({
-        defaultRole: "admin_jr_1",
-        allowedRoles: ["admin_jr_1"],
-        otherClaims: {
-          "X-Hasura-User-Id": userId,
-        },
-      }),
-    });
-  }
+      ) as any;
+    
+      const { id: userId } = insert_user_one;
+    
+      res.send({
+        token: generateJWT({
+          defaultRole: default_role,
+          allowedRoles: allowed_roles.split(","),
+          otherClaims: {
+            "X-Hasura-User-Id": userId,
+          },
+        }),
+      });
+    } catch (error) {
+      res.status(500).send();
+    }
+}
 
 
 export const login = async (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+
+  if(!req.body.email && !req.body.password){
+    res.sendStatus(401);
+    return;
+  }
+
     const { email, password } = req.body as Record<string, string>;
   
     let { user } = await client.request(
@@ -49,7 +66,10 @@ export const login = async (req, res) => {
         query getUserByEmail($email: String!) {
           user(where: { email: { _eq: $email } }) {
             id
+            username
             password
+            allowed_roles
+            default_role
           }
         }
       `,
@@ -70,14 +90,18 @@ export const login = async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password);
   
     if (passwordMatch) {
+      res.header('Access-Control-Allow-Origin', '*');
       res.send({
-        token: generateJWT({
-          defaultRole: "user",
-          allowedRoles: ["user"],
+        token: "Bearer " + generateJWT({
+          defaultRole: user.default_role,
+          allowedRoles: user.allowed_roles.split(","),
           otherClaims: {
             "X-Hasura-User-Id": user.id,
           },
         }),
+        username: user.username,
+        allowed_roles: user.allowed_roles,
+        default_role: user.default_role
       });
     } else {
       res.sendStatus(401);
