@@ -25,7 +25,7 @@ export const register = async (req, res) => {
         {
           user: {
             username,
-            email,
+            email: email.replace(/\s/g,''),
             password: await bcrypt.hash(password, 10),
             phone,
             default_role
@@ -67,11 +67,12 @@ export const login = async (req, res) => {
             username
             password
             default_role
+            deleted
           }
         }
       `,
       {
-        email,
+        email: email.replace(/\s/g,''),
       }
     ) as any;
   
@@ -86,7 +87,7 @@ export const login = async (req, res) => {
     // Check if password matches the hashed version
     const passwordMatch = await bcrypt.compare(password, user.password);
   
-    if (passwordMatch) {
+    if (passwordMatch && !user.deleted) {
       res.header('Access-Control-Allow-Origin', '*');
       res.send({
         token: "Bearer " + generateJWT({
